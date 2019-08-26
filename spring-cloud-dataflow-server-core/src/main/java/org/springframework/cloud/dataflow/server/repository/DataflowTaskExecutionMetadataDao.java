@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      https://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,15 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.springframework.cloud.dataflow.server.service.impl;
+package org.springframework.cloud.dataflow.server.repository;
 
-import com.fasterxml.jackson.annotation.JsonValue;
+import org.springframework.cloud.dataflow.core.TaskDefinition;
+import org.springframework.cloud.dataflow.core.TaskManifest;
+import org.springframework.cloud.task.repository.TaskExecution;
 
 /**
- * @author Mark Pollack
+ * @author Michael Minella
  */
-public abstract class ResourceMixin {
+public interface DataflowTaskExecutionMetadataDao {
 
-	@JsonValue
-	public abstract String toString();
+	void save(TaskExecution taskExecution, TaskManifest manifest);
+
+	TaskManifest getLastManifest(TaskDefinition taskDefinition);
 }
