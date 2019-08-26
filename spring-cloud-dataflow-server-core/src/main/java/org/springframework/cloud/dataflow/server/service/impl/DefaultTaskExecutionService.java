@@ -31,22 +31,19 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.springframework.cloud.common.security.support.TokenUtils;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-
 import org.springframework.cloud.dataflow.audit.service.AuditRecordService;
 import org.springframework.cloud.dataflow.core.AuditActionType;
 import org.springframework.cloud.dataflow.core.AuditOperationType;
 import org.springframework.cloud.dataflow.core.Launcher;
 import org.springframework.cloud.dataflow.core.TaskDefinition;
 import org.springframework.cloud.dataflow.core.TaskDeployment;
-import org.springframework.cloud.dataflow.core.TaskPlatformFactory;
 import org.springframework.cloud.dataflow.core.TaskManifest;
+import org.springframework.cloud.dataflow.core.TaskPlatformFactory;
 import org.springframework.cloud.dataflow.rest.util.ArgumentSanitizer;
 import org.springframework.cloud.dataflow.rest.util.DeploymentPropertiesUtils;
 import org.springframework.cloud.dataflow.server.job.LauncherRepository;
 import org.springframework.cloud.dataflow.server.repository.DataflowTaskExecutionDao;
+import org.springframework.cloud.dataflow.server.repository.DataflowTaskExecutionMetadataDao;
 import org.springframework.cloud.dataflow.server.repository.NoSuchTaskExecutionException;
 import org.springframework.cloud.dataflow.server.repository.TaskDeploymentRepository;
 import org.springframework.cloud.dataflow.server.repository.TaskExecutionMissingExternalIdException;
@@ -58,7 +55,6 @@ import org.springframework.cloud.deployer.spi.task.TaskLauncher;
 import org.springframework.cloud.task.repository.TaskExecution;
 import org.springframework.cloud.task.repository.TaskExplorer;
 import org.springframework.cloud.task.repository.TaskRepository;
-import org.springframework.core.io.Resource;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
@@ -118,13 +114,7 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 
 	private final DataflowTaskExecutionDao dataflowTaskExecutionDao;
 
-	public static final String TASK_DEFINITION_DSL_TEXT = "taskDefinitionDslText";
-
-	public static final String TASK_DEPLOYMENT_PROPERTIES = "taskDeploymentProperties";
-
-	public static final String COMMAND_LINE_ARGS = "commandLineArgs";
-
-	public static final String TASK_PLATFORM_NAME = "spring.cloud.dataflow.task.platformName";
+	private final DataflowTaskExecutionMetadataDao dataflowTaskExecutionMetadataDao;
 
 	/**
 	 * Initializes the {@link DefaultTaskExecutionService}.
@@ -144,7 +134,8 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 			TaskExecutionCreationService taskExecutionRepositoryService,
 			TaskAppDeploymentRequestCreator taskAppDeploymentRequestCreator,
 			TaskExplorer taskExplorer,
-			DataflowTaskExecutionDao dataflowTaskExecutionDao) {
+			DataflowTaskExecutionDao dataflowTaskExecutionDao,
+			DataflowTaskExecutionMetadataDao dataflowTaskExecutionMetadataDao) {
 		Assert.notNull(launcherRepository, "launcherRepository must not be null");
 		Assert.notNull(auditRecordService, "auditRecordService must not be null");
 		Assert.notNull(taskExecutionInfoService, "taskExecutionInfoService must not be null");
@@ -155,6 +146,7 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 		Assert.notNull(taskAppDeploymentRequestCreator, "taskAppDeploymentRequestCreator must not be null");
 		Assert.notNull(taskExplorer, "taskExplorer must not be null");
 		Assert.notNull(dataflowTaskExecutionDao, "dataflowTaskExecutionDao must not be null");
+		Assert.notNull(dataflowTaskExecutionMetadataDao, "dataflowTaskExecutionMetadataDao must not be null");
 
 		this.launcherRepository = launcherRepository;
 		this.auditRecordService = auditRecordService;
@@ -165,6 +157,7 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 		this.taskAppDeploymentRequestCreator = taskAppDeploymentRequestCreator;
 		this.taskExplorer = taskExplorer;
 		this.dataflowTaskExecutionDao = dataflowTaskExecutionDao;
+		this.dataflowTaskExecutionMetadataDao = dataflowTaskExecutionMetadataDao;
 	}
 
 	@Override
@@ -193,6 +186,9 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 		DeploymentPropertiesUtils.validateDeploymentProperties(taskDeploymentProperties);
 
 		TaskLauncher taskLauncher = findTaskLauncher(platformName);
+
+		//TODO: COMPARE MANIFESTS TO DETERMINE CHANGE
+		//TODO: DELETE APP IF THERE WAS A CHANGE
 
 		TaskDeployment existingTaskDeployment = taskDeploymentRepository
 				.findTopByTaskDefinitionNameOrderByCreatedOnAsc(taskName);
@@ -236,11 +232,12 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 			}
 		}
 
-		AppDeploymentRequest request = this.taskAppDeploymentRequestCreator.
+		AppDeploymentRequest appDeploymentRequest = this.taskAppDeploymentRequestCreator.
 				createRequest(taskExecution, taskExecutionInformation, commandLineArgs, platformName);
 
 		// Task Manifest
 		TaskManifest taskManifest = new TaskManifest();
+		taskManifest.setPlatformName(platformName);
 		String composedTaskDsl = taskExecutionInformation.getTaskDefinition().getProperties().get("graph");
 		if (StringUtils.hasText(composedTaskDsl)) {
 			taskManifest.setDslText(composedTaskDsl); // this is now empty.
@@ -250,18 +247,13 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 					taskManifest.getDslText());
 			taskManifest.setSubTaskDeploymentRequests(subTaskAppDeploymentRequests);
 
-			ObjectMapper objectMapper = new ObjectMapper();
-			objectMapper.addMixIn(Resource.class, ResourceMixin.class);
-			objectMapper.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
-			try {
-				String manifestAsString = objectMapper.writeValueAsString(taskManifest);
-				System.out.println(manifestAsString);
-				// taskDeployment.setTaskManifestString(manifestAsString);
-			}
-			catch (JsonProcessingException e) {
-				throw new IllegalArgumentException("Could not serialize Task Manifest", e);
-			}
 		}
+		else {
+			taskManifest.setDslText(taskExecutionInformation.getTaskDefinition().getDslText());
+			taskManifest.setTaskDeploymentRequest(appDeploymentRequest);
+		}
+
+		this.dataflowTaskExecutionMetadataDao.save(taskExecution, taskManifest);
 
 		String taskDeploymentId = taskLauncher.launch(appDeploymentRequest);
 		if (!StringUtils.hasText(taskDeploymentId)) {
