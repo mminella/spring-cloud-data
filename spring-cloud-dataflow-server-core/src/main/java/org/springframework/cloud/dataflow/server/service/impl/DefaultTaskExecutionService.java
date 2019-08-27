@@ -55,6 +55,7 @@ import org.springframework.cloud.deployer.spi.task.TaskLauncher;
 import org.springframework.cloud.task.repository.TaskExecution;
 import org.springframework.cloud.task.repository.TaskExplorer;
 import org.springframework.cloud.task.repository.TaskRepository;
+import org.springframework.core.io.Resource;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
@@ -187,9 +188,6 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 
 		TaskLauncher taskLauncher = findTaskLauncher(platformName);
 
-		//TODO: COMPARE MANIFESTS TO DETERMINE CHANGE
-		//TODO: DELETE APP IF THERE WAS A CHANGE
-
 		TaskDeployment existingTaskDeployment = taskDeploymentRepository
 				.findTopByTaskDefinitionNameOrderByCreatedOnAsc(taskName);
 		if (existingTaskDeployment != null) {
@@ -255,6 +253,13 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 
 		this.dataflowTaskExecutionMetadataDao.save(taskExecution, taskManifest);
 
+		TaskManifest previousManifest = this.dataflowTaskExecutionMetadataDao.getLastManifest(taskName);
+
+		if(previousManifest != null && !isAppDeploymentSame(previousManifest, taskManifest)) {
+			System.out.println(">> going to destroy the app");
+			taskLauncher.destroy(taskName);
+		}
+
 		String taskDeploymentId = taskLauncher.launch(appDeploymentRequest);
 		if (!StringUtils.hasText(taskDeploymentId)) {
 			throw new IllegalStateException("Deployment ID is null for the task:" + taskName);
@@ -275,6 +280,19 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 						appDeploymentRequest.getCommandlineArguments()));
 
 		return taskExecution.getExecutionId();
+	}
+
+	private boolean isAppDeploymentSame(TaskManifest previousManifest, TaskManifest newManifest) {
+		boolean same;
+
+		Resource previousResource = previousManifest.getTaskDeploymentRequest().getResource();
+		Resource newResource = newManifest.getTaskDeploymentRequest().getResource();
+
+		same = previousResource.equals(newResource);
+
+		System.out.println(">>> same = " + same);
+
+		return same;
 	}
 
 	@Override
