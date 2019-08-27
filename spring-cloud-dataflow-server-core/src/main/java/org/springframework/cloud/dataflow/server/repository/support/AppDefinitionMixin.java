@@ -13,17 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.springframework.cloud.dataflow.server.repository;
+package org.springframework.cloud.dataflow.server.repository.support;
 
-import org.springframework.cloud.dataflow.core.TaskManifest;
-import org.springframework.cloud.task.repository.TaskExecution;
+import java.util.Map;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
  * @author Michael Minella
  */
-public interface DataflowTaskExecutionMetadataDao {
+public abstract class AppDefinitionMixin {
 
-	void save(TaskExecution taskExecution, TaskManifest manifest);
+	AppDefinitionMixin(@JsonProperty("name")String name, @JsonProperty("properties")Map<String, String> properties) {}
 
-	TaskManifest getLastManifest(String taskName);
 }

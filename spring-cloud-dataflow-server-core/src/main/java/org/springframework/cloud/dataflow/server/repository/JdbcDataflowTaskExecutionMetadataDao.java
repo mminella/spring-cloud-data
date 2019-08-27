@@ -21,12 +21,19 @@ import javax.sql.DataSource;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.module.SimpleModule;
 
-import org.springframework.cloud.dataflow.core.TaskDefinition;
 import org.springframework.cloud.dataflow.core.TaskManifest;
+import org.springframework.cloud.dataflow.server.repository.support.AppDefinitionMixin;
+import org.springframework.cloud.dataflow.server.repository.support.AppDeploymentRequestMixin;
+import org.springframework.cloud.dataflow.server.service.impl.ResourceDeserializer;
 import org.springframework.cloud.dataflow.server.service.impl.ResourceMixin;
+import org.springframework.cloud.deployer.spi.core.AppDefinition;
+import org.springframework.cloud.deployer.spi.core.AppDeploymentRequest;
 import org.springframework.cloud.task.repository.TaskExecution;
+import org.springframework.context.ApplicationContext;
 import org.springframework.core.io.Resource;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.support.incrementer.DataFieldMaxValueIncrementer;
@@ -52,13 +59,21 @@ public class JdbcDataflowTaskExecutionMetadataDao implements DataflowTaskExecuti
 
 	private final ObjectMapper objectMapper;
 
-	public JdbcDataflowTaskExecutionMetadataDao(DataSource dataSource, DataFieldMaxValueIncrementer incrementer) {
+	public JdbcDataflowTaskExecutionMetadataDao(DataSource dataSource,
+			DataFieldMaxValueIncrementer incrementer,
+			ApplicationContext context) {
+
 		this.incrementer = incrementer;
 
 		this.jdbcTemplate = new NamedParameterJdbcTemplate(dataSource);
 
 		this.objectMapper = new ObjectMapper();
+		SimpleModule module = new SimpleModule();
+		module.addDeserializer(Resource.class, new ResourceDeserializer(context));
+		this.objectMapper.registerModule(module);
 		this.objectMapper.addMixIn(Resource.class, ResourceMixin.class);
+		this.objectMapper.addMixIn(AppDefinition.class, AppDefinitionMixin.class);
+		this.objectMapper.addMixIn(AppDeploymentRequest.class, AppDeploymentRequestMixin.class);
 		this.objectMapper.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
 	}
 
@@ -80,20 +95,24 @@ public class JdbcDataflowTaskExecutionMetadataDao implements DataflowTaskExecuti
 	}
 
 	@Override
-	public TaskManifest getLastManifest(TaskDefinition taskDefinition) {
+	public TaskManifest getLastManifest(String taskName) {
 		final MapSqlParameterSource queryParameters = new MapSqlParameterSource()
-				.addValue("taskName", taskDefinition.getTaskName());
+				.addValue("taskName", taskName);
 
-		return this.jdbcTemplate.queryForObject(FIND_LATEST_MANIFEST_BY_NAME,
-				queryParameters,
-				(resultSet, i) -> {
-					try {
-						return objectMapper.readValue(resultSet.getString("task_execution_manifest"), TaskManifest.class);
-					}
-					catch (IOException e) {
-						throw new IllegalArgumentException("Unable to deserialize manifest", e);
-					}
-				});
-
+		try {
+			return this.jdbcTemplate.queryForObject(FIND_LATEST_MANIFEST_BY_NAME,
+					queryParameters,
+					(resultSet, i) -> {
+						try {
+							return objectMapper.readValue(resultSet.getString("task_execution_manifest"), TaskManifest.class);
+						}
+						catch (IOException e) {
+							throw new IllegalArgumentException("Unable to deserialize manifest", e);
+						}
+					});
+		}
+		catch (EmptyResultDataAccessException erdae) {
+			return null;
+		}
 	}
 }
