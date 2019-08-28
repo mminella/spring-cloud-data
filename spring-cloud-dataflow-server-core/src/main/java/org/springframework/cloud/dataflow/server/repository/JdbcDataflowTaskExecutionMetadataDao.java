@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,6 +16,7 @@
 package org.springframework.cloud.dataflow.server.repository;
 
 import java.io.IOException;
+
 import javax.sql.DataSource;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -24,14 +25,17 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 
 import org.springframework.cloud.dataflow.core.TaskManifest;
+import org.springframework.cloud.dataflow.registry.support.AppResourceCommon;
 import org.springframework.cloud.dataflow.server.repository.support.AppDefinitionMixin;
 import org.springframework.cloud.dataflow.server.repository.support.AppDeploymentRequestMixin;
 import org.springframework.cloud.dataflow.server.service.impl.ResourceDeserializer;
 import org.springframework.cloud.dataflow.server.service.impl.ResourceMixin;
+import org.springframework.cloud.deployer.resource.maven.MavenProperties;
 import org.springframework.cloud.deployer.spi.core.AppDefinition;
 import org.springframework.cloud.deployer.spi.core.AppDeploymentRequest;
 import org.springframework.cloud.task.repository.TaskExecution;
 import org.springframework.context.ApplicationContext;
+import org.springframework.core.io.DefaultResourceLoader;
 import org.springframework.core.io.Resource;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -43,14 +47,14 @@ import org.springframework.jdbc.support.incrementer.DataFieldMaxValueIncrementer
  */
 public class JdbcDataflowTaskExecutionMetadataDao implements DataflowTaskExecutionMetadataDao {
 
-	private static final String INSERT_SQL = "INSERT INTO TASK_EXECUTION_METADATA (ID, TASK_EXECUTION_ID, " +
-			"TASK_EXECUTION_MANIFEST) VALUES (:id, :taskExecutionId, :taskExecutionManifest)";
+	private static final String INSERT_SQL = "INSERT INTO task_execution_metadata (id, task_execution_id, " +
+			"task_execution_manifest) VALUES (:id, :taskExecutionId, :taskExecutionManifest)";
 
 	private static final String FIND_LATEST_MANIFEST_BY_NAME = "select m.task_execution_manifest as task_execution_manifest\n" +
 			"from task_execution_metadata m inner join\n" +
-			"        task_execution e on m.task_execution_id = e.task_execution_id\n" +
-			"where e.task_name = :taskName\n" +
-			"order by e.task_execution_id desc\n" +
+			"        TASK_EXECUTION e on m.task_execution_id = e.TASK_EXECUTION_ID\n" +
+			"where e.TASK_NAME = :taskName\n" +
+			"order by e.TASK_EXECUTION_ID desc\n" +
 			"limit 0,1;";
 
 	private final NamedParameterJdbcTemplate jdbcTemplate;
@@ -69,7 +73,8 @@ public class JdbcDataflowTaskExecutionMetadataDao implements DataflowTaskExecuti
 
 		this.objectMapper = new ObjectMapper();
 		SimpleModule module = new SimpleModule();
-		module.addDeserializer(Resource.class, new ResourceDeserializer(context));
+		module.addDeserializer(Resource.class,
+				new ResourceDeserializer(new AppResourceCommon(new MavenProperties(), new DefaultResourceLoader())));
 		this.objectMapper.registerModule(module);
 		this.objectMapper.addMixIn(Resource.class, ResourceMixin.class);
 		this.objectMapper.addMixIn(AppDefinition.class, AppDefinitionMixin.class);
