@@ -16,6 +16,7 @@
 
 package org.springframework.cloud.dataflow.server.service.impl;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -251,14 +252,27 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 			taskManifest.setTaskDeploymentRequest(appDeploymentRequest);
 		}
 
-		this.dataflowTaskExecutionMetadataDao.save(taskExecution, taskManifest);
-
 		TaskManifest previousManifest = this.dataflowTaskExecutionMetadataDao.getLastManifest(taskName);
 
 		if(previousManifest != null && !isAppDeploymentSame(previousManifest, taskManifest)) {
 			System.out.println(">> going to destroy the app");
 			taskLauncher.destroy(taskName);
+
+			//TODO: Need to replace this with polling the system to verify destroy was completed.
+			try {
+				System.out.println(">> waiting 15 seconds for destroy to complete");
+				Thread.sleep(15000);
+				System.out.println(">> done waiting 15 seconds for destroy to complete...fingers crossed");
+			}
+			catch (InterruptedException e) {
+				e.printStackTrace();
+			}
 		}
+		else {
+			System.out.println(">> The app lives!!!");
+		}
+
+		this.dataflowTaskExecutionMetadataDao.save(taskExecution, taskManifest);
 
 		String taskDeploymentId = taskLauncher.launch(appDeploymentRequest);
 		if (!StringUtils.hasText(taskDeploymentId)) {
@@ -287,6 +301,14 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 
 		Resource previousResource = previousManifest.getTaskDeploymentRequest().getResource();
 		Resource newResource = newManifest.getTaskDeploymentRequest().getResource();
+
+		try {
+			System.out.println(">>> previousResource = " + previousResource.getURI());
+			System.out.println(">>> newResource = " + newResource.getURI());
+		}
+		catch (IOException e) {
+			e.printStackTrace();
+		}
 
 		same = previousResource.equals(newResource);
 
