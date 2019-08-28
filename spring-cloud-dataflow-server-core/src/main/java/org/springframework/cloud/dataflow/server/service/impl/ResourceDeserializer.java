@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -24,7 +24,7 @@ import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.JsonNode;
 
-import org.springframework.context.ApplicationContext;
+import org.springframework.cloud.dataflow.registry.support.AppResourceCommon;
 import org.springframework.core.io.Resource;
 
 /**
@@ -32,10 +32,10 @@ import org.springframework.core.io.Resource;
  */
 public class ResourceDeserializer extends JsonDeserializer<Resource> {
 
-	final private ApplicationContext context;
+	final private AppResourceCommon appResourceCommon;
 
-	public ResourceDeserializer(ApplicationContext context) {
-		this.context = context;
+	public ResourceDeserializer(AppResourceCommon appResourceCommon) {
+		this.appResourceCommon = appResourceCommon;
 	}
 
 	@Override
@@ -45,6 +45,8 @@ public class ResourceDeserializer extends JsonDeserializer<Resource> {
 
 		final String url = node.asText();
 
-		return context.getResource(url);
+		System.out.println(">> url from serialized metadata: " + url);
+
+		return this.appResourceCommon.getResource(url);
 	}
 }

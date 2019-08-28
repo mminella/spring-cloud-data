@@ -23,5 +23,5 @@ import com.fasterxml.jackson.annotation.JsonValue;
 public abstract class ResourceMixin {
 
 	@JsonValue
-	public abstract String toString();
+	public abstract String getURI();
 }
