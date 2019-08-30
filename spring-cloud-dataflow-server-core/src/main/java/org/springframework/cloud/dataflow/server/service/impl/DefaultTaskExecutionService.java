@@ -17,6 +17,7 @@
 package org.springframework.cloud.dataflow.server.service.impl;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -25,6 +26,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -57,6 +59,8 @@ import org.springframework.cloud.task.repository.TaskExecution;
 import org.springframework.cloud.task.repository.TaskExplorer;
 import org.springframework.cloud.task.repository.TaskRepository;
 import org.springframework.core.io.Resource;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
@@ -118,6 +122,8 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 
 	private final DataflowTaskExecutionMetadataDao dataflowTaskExecutionMetadataDao;
 
+	private final Map<String, List<String>> tasksBeingUpgraded = new ConcurrentHashMap<>();
+
 	/**
 	 * Initializes the {@link DefaultTaskExecutionService}.
 	 *
@@ -173,6 +179,14 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 			platformName = "default";
 		}
 
+		if(this.tasksBeingUpgraded.containsKey(taskName)) {
+			List<String> platforms = this.tasksBeingUpgraded.get(taskName);
+
+			if(platforms.contains(platformName)) {
+				throw new IllegalStateException(String.format("Unable to launch %s on platform %s because it is being upgraded", taskName, platformName));
+			}
+		}
+
 		// In case we have exactly one launcher, we override to that
 		List<String> launcherNames = StreamSupport.stream(launcherRepository.findAll().spliterator(), false)
 				.map(Launcher::getName).collect(Collectors.toList());
@@ -202,8 +216,6 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 		TaskExecutionInformation taskExecutionInformation = taskExecutionInfoService
 				.findTaskExecutionInformation(taskName, taskDeploymentProperties, composedTaskRunnerName);
 
-		TaskExecution taskExecution = taskExecutionRepositoryService.createTaskExecution(taskName);
-
 		if (taskExecutionInformation.isComposed()) {
 			boolean containsAccessToken = false;
 
@@ -231,6 +243,8 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 			}
 		}
 
+		TaskExecution taskExecution = taskExecutionRepositoryService.createTaskExecution(taskName);
+
 		AppDeploymentRequest appDeploymentRequest = this.taskAppDeploymentRequestCreator.
 				createRequest(taskExecution, taskExecutionInformation, commandLineArgs, platformName);
 
@@ -255,10 +269,25 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 		TaskManifest previousManifest = this.dataflowTaskExecutionMetadataDao.getLastManifest(taskName);
 
 		if(previousManifest != null && !isAppDeploymentSame(previousManifest, taskManifest)) {
+
+			Page<TaskExecution> runningTaskExecutions =
+					this.taskExplorer.findRunningTaskExecutions(taskName, PageRequest.of(0, 1));
+
+			//TODO add force flag to allow overriding this
+			if(runningTaskExecutions.getTotalElements() > 0) {
+				throw new IllegalStateException("Unable to update application due to currently running applications");
+			}
+			else if(this.tasksBeingUpgraded.containsKey(taskName)) {
+				this.tasksBeingUpgraded.get(taskName).add(platformName);
+			}
+			else {
+				this.tasksBeingUpgraded.put(taskName, Arrays.asList(platformName));
+			}
+
 			System.out.println(">> going to destroy the app");
 			taskLauncher.destroy(taskName);
 
-			//TODO: Need to replace this with polling the system to verify destroy was completed.
+			//TODO: Need to update the CF TaskLauncher to block so we know the task has been destroyed before proceeding.
 			try {
 				System.out.println(">> waiting 15 seconds for destroy to complete");
 				Thread.sleep(15000);
@@ -267,6 +296,28 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 			catch (InterruptedException e) {
 				e.printStackTrace();
 			}
+
+			TaskExecutionInformation info = new TaskExecutionInformation();
+			info.setTaskDefinition(taskExecutionInformation.getTaskDefinition());
+			info.setAppResource(taskExecutionInformation.getAppResource());
+			info.setComposed(taskExecutionInformation.isComposed());
+			info.setMetadataResource(taskExecutionInformation.getMetadataResource());
+			info.setOriginalTaskDefinition(taskExecutionInformation.getOriginalTaskDefinition());
+
+			if(taskDeploymentProperties.isEmpty()) {
+				//TODO: Deployment properties get rewritten in the process.  Need to undo that for replacement...
+				System.out.println(">> replacing deployment properties");
+				info.setTaskDeploymentProperties(previousManifest.getTaskDeploymentRequest().getDeploymentProperties());
+				System.out.println(">> new deployment properties are: " + info.getTaskDeploymentProperties());
+
+				appDeploymentRequest = this.taskAppDeploymentRequestCreator.
+						createRequest(taskExecution, info, commandLineArgs, platformName);
+				System.out.println(">> deployment props after replacement: " + appDeploymentRequest.getDeploymentProperties());
+
+				taskManifest.setTaskDeploymentRequest(appDeploymentRequest);
+			}
+
+			System.out.println(">> deployment after the if statement: " + appDeploymentRequest.getDeploymentProperties());
 		}
 		else {
 			System.out.println(">> The app lives!!!");
@@ -274,6 +325,7 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 
 		this.dataflowTaskExecutionMetadataDao.save(taskExecution, taskManifest);
 
+		System.out.println(">> deployment props before launch: " + appDeploymentRequest.getDeploymentProperties());
 		String taskDeploymentId = taskLauncher.launch(appDeploymentRequest);
 		if (!StringUtils.hasText(taskDeploymentId)) {
 			throw new IllegalStateException("Deployment ID is null for the task:" + taskName);
@@ -311,6 +363,16 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 		}
 
 		same = previousResource.equals(newResource);
+
+		//TODO: Add comparison for app properties
+
+		Map<String, String> previousDeploymentProperties = previousManifest.getTaskDeploymentRequest().getDeploymentProperties();
+		Map<String, String> newDeploymentProperties = newManifest.getTaskDeploymentRequest().getDeploymentProperties();
+
+		System.out.println(">> pdp: + " + previousDeploymentProperties.toString());
+		System.out.println(">> ndp: + " + newDeploymentProperties.toString());
+
+		same = same && previousDeploymentProperties.equals(newDeploymentProperties);
 
 		System.out.println(">>> same = " + same);
 
