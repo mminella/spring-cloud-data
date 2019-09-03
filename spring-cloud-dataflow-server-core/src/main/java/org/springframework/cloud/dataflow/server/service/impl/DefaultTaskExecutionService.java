@@ -172,6 +172,8 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 	public long executeTask(String taskName, Map<String, String> taskDeploymentProperties, List<String> commandLineArgs,
 			String composedTaskRunnerName) {
 
+		System.out.println(">> DEPLOYMENT PROPERTIES: " + taskDeploymentProperties);
+
 		String platformName = taskDeploymentProperties.get(TASK_PLATFORM_NAME);
 
 		// If not given, use 'default'
@@ -297,29 +299,39 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 				e.printStackTrace();
 			}
 
-			TaskExecutionInformation info = new TaskExecutionInformation();
-			info.setTaskDefinition(taskExecutionInformation.getTaskDefinition());
-			info.setAppResource(taskExecutionInformation.getAppResource());
-			info.setComposed(taskExecutionInformation.isComposed());
-			info.setMetadataResource(taskExecutionInformation.getMetadataResource());
-			info.setOriginalTaskDefinition(taskExecutionInformation.getOriginalTaskDefinition());
-
 			if(taskDeploymentProperties.isEmpty()) {
-				//TODO: Deployment properties get rewritten in the process.  Need to undo that for replacement...
 				System.out.println(">> replacing deployment properties");
+				TaskExecutionInformation info = new TaskExecutionInformation();
+				info.setTaskDefinition(taskExecutionInformation.getTaskDefinition());
+				info.setAppResource(taskExecutionInformation.getAppResource());
+				info.setComposed(taskExecutionInformation.isComposed());
+				info.setMetadataResource(taskExecutionInformation.getMetadataResource());
+				info.setOriginalTaskDefinition(taskExecutionInformation.getOriginalTaskDefinition());
 				info.setTaskDeploymentProperties(previousManifest.getTaskDeploymentRequest().getDeploymentProperties());
 				System.out.println(">> new deployment properties are: " + info.getTaskDeploymentProperties());
+
+				AppDeploymentRequest manifestRequest = new AppDeploymentRequest(appDeploymentRequest.getDefinition(),
+						appDeploymentRequest.getResource(),
+						previousManifest.getTaskDeploymentRequest().getDeploymentProperties(),
+						appDeploymentRequest.getCommandlineArguments());
 
 				appDeploymentRequest = this.taskAppDeploymentRequestCreator.
 						createRequest(taskExecution, info, commandLineArgs, platformName);
 				System.out.println(">> deployment props after replacement: " + appDeploymentRequest.getDeploymentProperties());
 
-				taskManifest.setTaskDeploymentRequest(appDeploymentRequest);
+				taskManifest.setTaskDeploymentRequest(manifestRequest);
 			}
 
 			System.out.println(">> deployment after the if statement: " + appDeploymentRequest.getDeploymentProperties());
 		}
 		else {
+			AppDeploymentRequest request = new AppDeploymentRequest(appDeploymentRequest.getDefinition(),
+					appDeploymentRequest.getResource(),
+					taskDeploymentProperties,
+					appDeploymentRequest.getCommandlineArguments());
+
+			taskManifest.setTaskDeploymentRequest(request);
+
 			System.out.println(">> The app lives!!!");
 		}
 
@@ -364,7 +376,7 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 
 		same = previousResource.equals(newResource);
 
-		//TODO: Add comparison for app properties
+		//TODO: Add comparison for app properties && address if deployment properties on rerun are empty (aka reuse old ones)
 
 		Map<String, String> previousDeploymentProperties = previousManifest.getTaskDeploymentRequest().getDeploymentProperties();
 		Map<String, String> newDeploymentProperties = newManifest.getTaskDeploymentRequest().getDeploymentProperties();
