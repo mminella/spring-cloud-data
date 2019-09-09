@@ -342,13 +342,7 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 		String taskDeploymentId = taskLauncher.launch(appDeploymentRequest);
 
 		if(this.tasksBeingUpgraded.containsKey(taskName)) {
-			List<String> platformList = new ArrayList<>();
-			for (String platformNameInstance : this.tasksBeingUpgraded.get(taskName)) {
-				if (!platformNameInstance.equals(platformName)) {
-					platformList.add(platformNameInstance);
-				}
-			}
-			this.tasksBeingUpgraded.put(taskName, platformList);
+			this.tasksBeingUpgraded.get(taskName).remove(platformName);
 		}
 
 		if (!StringUtils.hasText(taskDeploymentId)) {
