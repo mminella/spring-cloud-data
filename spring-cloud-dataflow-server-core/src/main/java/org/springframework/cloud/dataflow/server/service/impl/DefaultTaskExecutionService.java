@@ -252,19 +252,20 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 
 		// Task Manifest
 		TaskManifest taskManifest = new TaskManifest();
+		System.out.println(">> taskExecutionInformation: " + taskExecutionInformation);
+		System.out.println(">> taskExecutionInformation.taskDefinition: " + taskExecutionInformation.getTaskDefinition());
+		System.out.println(">> taskExecutionInformation.taskDefinition.dslText: " + taskExecutionInformation.getTaskDefinition().getDslText());
 		taskManifest.setPlatformName(platformName);
 		String composedTaskDsl = taskExecutionInformation.getTaskDefinition().getProperties().get("graph");
 		if (StringUtils.hasText(composedTaskDsl)) {
-			taskManifest.setDslText(composedTaskDsl); // this is now empty.
 			taskManifest.setTaskDeploymentRequest(appDeploymentRequest);
 			List<AppDeploymentRequest> subTaskAppDeploymentRequests = this.taskExecutionInfoService.createRequests(
 					taskExecutionInformation.getTaskDefinition().getTaskName(),
-					taskManifest.getDslText());
+					taskExecutionInformation.getTaskDefinition().getDslText());
 			taskManifest.setSubTaskDeploymentRequests(subTaskAppDeploymentRequests);
 
 		}
 		else {
-			taskManifest.setDslText(taskExecutionInformation.getTaskDefinition().getDslText());
 			taskManifest.setTaskDeploymentRequest(appDeploymentRequest);
 		}
 
@@ -376,7 +377,7 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 
 		same = previousResource.equals(newResource);
 
-		//TODO: Add comparison for app properties && address if deployment properties on rerun are empty (aka reuse old ones)
+		//TODO: Add comparison for app properties
 
 		Map<String, String> previousDeploymentProperties = previousManifest.getTaskDeploymentRequest().getDeploymentProperties();
 		Map<String, String> newDeploymentProperties = newManifest.getTaskDeploymentRequest().getDeploymentProperties();
@@ -384,7 +385,7 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 		System.out.println(">> pdp: + " + previousDeploymentProperties.toString());
 		System.out.println(">> ndp: + " + newDeploymentProperties.toString());
 
-		same = same && previousDeploymentProperties.equals(newDeploymentProperties);
+		same = same && (newDeploymentProperties.isEmpty() || previousDeploymentProperties.equals(newDeploymentProperties));
 
 		System.out.println(">>> same = " + same);
 

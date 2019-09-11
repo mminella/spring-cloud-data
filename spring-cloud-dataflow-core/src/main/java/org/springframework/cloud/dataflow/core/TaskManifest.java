@@ -24,8 +24,6 @@ import org.springframework.cloud.deployer.spi.core.AppDeploymentRequest;
  */
 public class TaskManifest {
 
-	private String dslText;
-
 	private AppDeploymentRequest taskDeploymentRequest;
 
 	private List<AppDeploymentRequest> subTaskDeploymentRequests;
@@ -38,14 +36,6 @@ public class TaskManifest {
 
 	public void setPlatformName(String platformName) {
 		this.platformName = platformName;
-	}
-
-	public String getDslText() {
-		return dslText;
-	}
-
-	public void setDslText(String dslText) {
-		this.dslText = dslText;
 	}
 
 	public AppDeploymentRequest getTaskDeploymentRequest() {
