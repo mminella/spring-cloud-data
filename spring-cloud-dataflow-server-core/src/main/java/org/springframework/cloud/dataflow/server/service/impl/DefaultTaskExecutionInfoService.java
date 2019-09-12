@@ -149,7 +149,7 @@ public class DefaultTaskExecutionInfoService implements TaskExecutionInfoService
 					TaskServiceUtils.establishComposedTaskProperties(taskDeploymentProperties,
 							taskNode));
 			taskDefinitionToUse = TaskServiceUtils.updateTaskProperties(taskDefinitionToUse,
-					dataSourceProperties);
+								dataSourceProperties);
 		}
 		else {
 			taskDefinitionToUse = TaskServiceUtils.updateTaskProperties(originalTaskDefinition,

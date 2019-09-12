@@ -125,7 +125,7 @@ public class TaskServiceUtils {
 			builder.setProperty("spring.datasource.password", dataSourceProperties.getPassword());
 		}
 		builder.setProperty("spring.datasource.driverClassName", dataSourceProperties.getDriverClassName());
-
+		builder.setDslText(taskDefinition.getDslText());
 		return builder.build();
 	}
 
