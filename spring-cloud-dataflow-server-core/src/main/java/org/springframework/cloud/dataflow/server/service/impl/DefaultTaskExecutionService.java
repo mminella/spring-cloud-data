@@ -292,14 +292,14 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 			taskLauncher.destroy(taskName);
 
 			//TODO: Need to update the CF TaskLauncher to block so we know the task has been destroyed before proceeding.
-			try {
-				System.out.println(">> waiting 15 seconds for destroy to complete");
-				Thread.sleep(15000);
-				System.out.println(">> done waiting 15 seconds for destroy to complete...fingers crossed");
-			}
-			catch (InterruptedException e) {
-				e.printStackTrace();
-			}
+//			try {
+//				System.out.println(">> waiting 15 seconds for destroy to complete");
+//				Thread.sleep(15000);
+//				System.out.println(">> done waiting 15 seconds for destroy to complete...fingers crossed");
+//			}
+//			catch (InterruptedException e) {
+//				e.printStackTrace();
+//			}
 
 			if(taskDeploymentProperties.isEmpty()) {
 				System.out.println(">> replacing deployment properties");
