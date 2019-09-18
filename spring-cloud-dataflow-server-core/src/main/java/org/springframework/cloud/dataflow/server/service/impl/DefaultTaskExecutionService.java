@@ -382,7 +382,7 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 			logger.debug("Previous resource was %s and new resource is %s", previousResource.getURI().toString(), newResource.getURI().toString());
 		}
 		catch (IOException e) {
-			logger.debug("Unable to obtain URIs from resources to be compared", e);
+			logger.debug("Unable to obtain URIs from resources to be compared in debug log statement", e);
 		}
 
 		same = previousResource.equals(newResource);
@@ -392,7 +392,7 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 		Map<String, String> previousDeploymentProperties = previousManifest.getTaskDeploymentRequest().getDeploymentProperties();
 		Map<String, String> newDeploymentProperties = newManifest.getTaskDeploymentRequest().getDeploymentProperties();
 
-		same = same && (newDeploymentProperties.isEmpty() || previousDeploymentProperties.equals(newDeploymentProperties));
+		same = same && (previousDeploymentProperties.equals(newDeploymentProperties));
 
 		return same;
 	}
