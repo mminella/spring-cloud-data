@@ -270,7 +270,7 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 
 		TaskManifest previousManifest = this.dataflowTaskExecutionMetadataDao.getLastManifest(taskName);
 
-		if(previousManifest != null && !isAppDeploymentSame(previousManifest, taskManifest)) {
+		if(previousManifest != null && !isAppDeploymentSame(previousManifest, taskManifest.getTaskDeploymentRequest().getResource(), taskDeploymentProperties)) {
 
 			Page<TaskExecution> runningTaskExecutions =
 					this.taskExplorer.findRunningTaskExecutions(taskName, PageRequest.of(0, 1));
@@ -301,7 +301,9 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 				e.printStackTrace();
 			}
 
-			if(taskDeploymentProperties.isEmpty()) {
+			if(!previousManifest.getTaskDeploymentRequest().getResource()
+					.equals(taskManifest.getTaskDeploymentRequest().getResource())
+					&& taskDeploymentProperties.isEmpty()) {
 				System.out.println(">> replacing deployment properties");
 				TaskExecutionInformation info = new TaskExecutionInformation();
 				info.setTaskDefinition(taskExecutionInformation.getTaskDefinition());
@@ -322,6 +324,14 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 				System.out.println(">> deployment props after replacement: " + appDeploymentRequest.getDeploymentProperties());
 
 				taskManifest.setTaskDeploymentRequest(manifestRequest);
+			}
+			else {
+				AppDeploymentRequest request = new AppDeploymentRequest(appDeploymentRequest.getDefinition(),
+						appDeploymentRequest.getResource(),
+						taskDeploymentProperties,
+						appDeploymentRequest.getCommandlineArguments());
+
+				taskManifest.setTaskDeploymentRequest(request);
 			}
 
 			System.out.println(">> deployment after the if statement: " + appDeploymentRequest.getDeploymentProperties());
@@ -372,11 +382,10 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 		return taskExecution.getExecutionId();
 	}
 
-	private boolean isAppDeploymentSame(TaskManifest previousManifest, TaskManifest newManifest) {
+	private boolean isAppDeploymentSame(TaskManifest previousManifest, Resource newResource, Map<String, String> newDeploymentProperties) {
 		boolean same;
 
 		Resource previousResource = previousManifest.getTaskDeploymentRequest().getResource();
-		Resource newResource = newManifest.getTaskDeploymentRequest().getResource();
 
 		try {
 			System.out.println(">>> previousResource = " + previousResource.getURI());
@@ -391,12 +400,11 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 		//TODO: Add comparison for app properties
 
 		Map<String, String> previousDeploymentProperties = previousManifest.getTaskDeploymentRequest().getDeploymentProperties();
-		Map<String, String> newDeploymentProperties = newManifest.getTaskDeploymentRequest().getDeploymentProperties();
 
 		System.out.println(">> pdp: + " + previousDeploymentProperties.toString());
 		System.out.println(">> ndp: + " + newDeploymentProperties.toString());
 
-		same = same && (newDeploymentProperties.isEmpty() || previousDeploymentProperties.equals(newDeploymentProperties));
+		same = same && (previousDeploymentProperties.equals(newDeploymentProperties));
 
 		System.out.println(">>> same = " + same);
 
