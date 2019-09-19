@@ -205,30 +205,7 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 				.findTaskExecutionInformation(taskName, taskDeploymentProperties, composedTaskRunnerName);
 
 		if (taskExecutionInformation.isComposed()) {
-			boolean containsAccessToken = false;
-
-			final String dataflowAccessTokenKey = "dataflow-server-access-token";
-
-			for (String commandLineArg : commandLineArgs) {
-				if (commandLineArg.startsWith("--" + dataflowAccessTokenKey)) {
-					containsAccessToken = true;
-				}
-			}
-
-			final String dataflowAccessTokenPropertyKey = "app." + taskExecutionInformation.getTaskDefinition().getRegisteredAppName() + "." + dataflowAccessTokenKey;
-			for (Map.Entry<String, String> taskDeploymentProperty : taskExecutionInformation.getTaskDeploymentProperties().entrySet()) {
-				if (taskDeploymentProperty.getKey().equals(dataflowAccessTokenPropertyKey)) {
-					containsAccessToken = true;
-				}
-			}
-
-			if (!containsAccessToken) {
-				final String token = TokenUtils.getAccessToken();
-
-				if (token != null) {
-					taskExecutionInformation.getTaskDeploymentProperties().put(dataflowAccessTokenPropertyKey, token);
-				}
-			}
+			handleAccessToken(commandLineArgs, taskExecutionInformation);
 		}
 
 		TaskExecution taskExecution = taskExecutionRepositoryService.createTaskExecution(taskName);
@@ -296,6 +273,33 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 						appDeploymentRequest.getCommandlineArguments()));
 
 		return taskExecution.getExecutionId();
+	}
+
+	private void handleAccessToken(List<String> commandLineArgs, TaskExecutionInformation taskExecutionInformation) {
+		boolean containsAccessToken = false;
+
+		final String dataflowAccessTokenKey = "dataflow-server-access-token";
+
+		for (String commandLineArg : commandLineArgs) {
+			if (commandLineArg.startsWith("--" + dataflowAccessTokenKey)) {
+				containsAccessToken = true;
+			}
+		}
+
+		final String dataflowAccessTokenPropertyKey = "app." + taskExecutionInformation.getTaskDefinition().getRegisteredAppName() + "." + dataflowAccessTokenKey;
+		for (Map.Entry<String, String> taskDeploymentProperty : taskExecutionInformation.getTaskDeploymentProperties().entrySet()) {
+			if (taskDeploymentProperty.getKey().equals(dataflowAccessTokenPropertyKey)) {
+				containsAccessToken = true;
+			}
+		}
+
+		if (!containsAccessToken) {
+			final String token = TokenUtils.getAccessToken();
+
+			if (token != null) {
+				taskExecutionInformation.getTaskDeploymentProperties().put(dataflowAccessTokenPropertyKey, token);
+			}
+		}
 	}
 
 	private void saveExternalExecutionId(String taskName, TaskExecution taskExecution, String taskDeploymentId) {
@@ -396,17 +400,8 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 		Map<String, String> previousAppProperties = previousManifest.getTaskDeploymentRequest().getDefinition().getProperties();
 		Map<String, String> newAppProperties = newManifest.getTaskDeploymentRequest().getDefinition().getProperties();
 
-		System.out.println(">> previousAppProperties: " + previousAppProperties);
-		System.out.println(">> newAppProperties: " + newAppProperties);
-
 		Map<String, String> previousDeploymentProperties = previousManifest.getTaskDeploymentRequest().getDeploymentProperties();
 		Map<String, String> newDeploymentProperties = newManifest.getTaskDeploymentRequest().getDeploymentProperties();
-		System.out.println(">> previousDeploymentProperties: " + previousDeploymentProperties);
-		System.out.println(">> newDeploymentProperties: " + newDeploymentProperties);
-
-		System.out.println(">> same == " + same);
-		System.out.println(">> previousDeploymentProperties.equals(newDeploymentProperties)" + previousDeploymentProperties.equals(newDeploymentProperties));
-		System.out.println(">> previousAppProperties.equals(newAppProperties)" + previousAppProperties.equals(newAppProperties));
 
 		same = same && previousDeploymentProperties.equals(newDeploymentProperties) && previousAppProperties.equals(newAppProperties);
 
