@@ -240,14 +240,11 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 
 		TaskManifest previousManifest = this.dataflowTaskExecutionMetadataDao.getLastManifest(taskName);
 
-		if(!isAppDeploymentSame(previousManifest, taskManifest)) {
-
-			validateAndLockUpgrade(taskName, platformName);
-
-			logger.debug("Deleting %s and all related resources from the platform", taskName);
-			taskLauncher.destroy(taskName);
-
-			if(taskDeploymentProperties.isEmpty()) {
+		if(!taskDeploymentProperties.isEmpty()) {
+			taskDeploymentProperties = appDeploymentRequest.getDeploymentProperties();
+		}
+		else {
+			if(previousManifest != null && !previousManifest.getTaskDeploymentRequest().getDeploymentProperties().equals(taskDeploymentProperties)) {
 				appDeploymentRequest = updateDeploymentProperties(commandLineArgs, platformName, taskExecutionInformation, taskExecution, previousManifest);
 
 				taskDeploymentProperties = previousManifest.getTaskDeploymentRequest().getDeploymentProperties();
@@ -260,6 +257,15 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 				appDeploymentRequest.getCommandlineArguments());
 
 		taskManifest.setTaskDeploymentRequest(request);
+
+		if(!isAppDeploymentSame(previousManifest, taskManifest)) {
+
+			validateAndLockUpgrade(taskName, platformName);
+
+			logger.debug("Deleting %s and all related resources from the platform", taskName);
+			taskLauncher.destroy(taskName);
+
+		}
 
 		this.dataflowTaskExecutionMetadataDao.save(taskExecution, taskManifest);
 
@@ -387,12 +393,22 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
 
 		same = previousResource.equals(newResource);
 
-		//TODO: Add comparison for app properties
+		Map<String, String> previousAppProperties = previousManifest.getTaskDeploymentRequest().getDefinition().getProperties();
+		Map<String, String> newAppProperties = newManifest.getTaskDeploymentRequest().getDefinition().getProperties();
+
+		System.out.println(">> previousAppProperties: " + previousAppProperties);
+		System.out.println(">> newAppProperties: " + newAppProperties);
 
 		Map<String, String> previousDeploymentProperties = previousManifest.getTaskDeploymentRequest().getDeploymentProperties();
 		Map<String, String> newDeploymentProperties = newManifest.getTaskDeploymentRequest().getDeploymentProperties();
+		System.out.println(">> previousDeploymentProperties: " + previousDeploymentProperties);
+		System.out.println(">> newDeploymentProperties: " + newDeploymentProperties);
 
-		same = same && (previousDeploymentProperties.equals(newDeploymentProperties));
+		System.out.println(">> same == " + same);
+		System.out.println(">> previousDeploymentProperties.equals(newDeploymentProperties)" + previousDeploymentProperties.equals(newDeploymentProperties));
+		System.out.println(">> previousAppProperties.equals(newAppProperties)" + previousAppProperties.equals(newAppProperties));
+
+		same = same && previousDeploymentProperties.equals(newDeploymentProperties) && previousAppProperties.equals(newAppProperties);
 
 		return same;
 	}
